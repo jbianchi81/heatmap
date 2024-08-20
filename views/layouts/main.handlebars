@@ -42,6 +42,7 @@
 				<li><a href=#fdensobs>registros por red</a></li>
 				<li><a href=#fdensobsareal>registros areales por fuente</a></li>
 				<li><a href=#fdensobsrast>registros raster por fuente</a></li>
+				<li><a href=#fdensprono>pronósticos por calibrado</a></li>
 			</ul>
 			<div id=fdia>
 				<form class=getheatmap action="">
@@ -435,8 +436,84 @@
 					</table>
 				</form>
 			</div>
+			<div id=fdensprono>
+				<form class=getdensprono action="">
+					<table class=form>
+						<tr>
+							<td>
+								<label for=var_id>variable:</label>
+							</td>
+							<td>
+								<select type=integer class=varId name=var_id value="">
+									<option selected value=""> -- any --</option>
+								</select>
+							</td>
+						</tr>
+						<tr>
+							<td>
+								<label for=unit_id>Unidades:</label>
+							</td>
+							<td>
+								<select type=integer class=unitId name=unit_id value="">
+									<option selected value> -- any --</option>
+								</select>
+							</td>
+						</tr>
+						<tr>
+							<td>
+								<label for=timestart>Fecha inicial:</label>
+							</td>
+							<td>
+								<input type=date min="1900-01-01" class=timestart name=timestart value="{{timestart}}" />
+							</td>
+						</tr>
+						<tr>
+							<td>
+								<label for=timeend>Fecha final:</label>
+							</td>
+							<td>
+								<input type=date min="1900-01-01" class=timeend name=timeend value="{{timeend}}" />
+							</td>
+						</tr>
+						<tr>
+							<td>
+								<label for=dt>Intervalo temporal:</label>
+							</td>
+							<td>
+								<select type=text class=dt name=dt>
+									<option value="1 day" selected>1 día</option>
+									<option value="2 days">2 días</option>
+									<option value="3 days">3 días</option>
+									<option value="7 days">7 días</option>
+									<option value="14 days">14 días</option>
+									<option value="1 month">1 mes</option>
+									<option value="2 months">2 meses</option>
+									<option value="3 months">3 meses</option>
+									<option value="6 months">6 meses</option>
+									<option value="1 year">1 año</option>
+								</select>
+							</td>
+						</tr>
+						<tr>
+							<td>
+								<label for=count>Realizar conteo de:</label>
+							</td>
+							<td>
+								<select type=text class=count name=count>
+									<option value="observaciones" selected>pronósticos</option>
+									{{!-- <option value="estaciones">estaciones</option> --}}
+								</select>
+							</td>
+						<tr>
+							<td colspan=2>
+								<button type=submit >Cargar datos</button>
+							</td>
+						</tr>
+					</table>
+				</form>
+			</div>		
 		</div>
-		
+
 		<div id="container" hidden></div>
 
 		<script>
@@ -936,6 +1013,113 @@
 						var series_id = fuente.id
 						var thisformdata = [...formdata]
 						thisformdata.push({name:"series_id", value: series_id}) // thisformdata.push({name:"fuentes_id", value: fuentes_id})
+						thisformdata.push({name:"include_timestamps", value: true})
+						var querystring = thisformdata.map(x=>{
+							return x.name + "=" + x.value
+						}).join("&")
+						console.log(querystring)
+						$.get(url + "?" + querystring, (data,status) => {
+							if(status !== 'success') {
+								// chart.hideLoading();
+								alert("get densidad error! Status:" + status)
+								document.body.style.cursor = "default";
+								return
+							}
+							if(!data || !data.values || !Array.isArray(data.values)) {
+								// chart.hideLoading();
+								alert("get densidad error! Not found")
+								// document.body.style.cursor = "default";
+								return
+							}
+							heatmapdata = heatmapdata.concat(data.values.map((it,j)=>{
+								if(it > maxvalue) {
+									maxvalue = it
+								}
+								return [j,i,it]
+							}))
+							var chartwidth = $(window).width()
+							chart.series[0].setData(heatmapdata)
+							if(i==0) {  
+								chart.update({
+									xAxis: [{
+										categories: data.timestamps.map(ts=>new Date(ts).toISOString().substring(0,13))
+									},{
+										categories: data.timestamps.map(ts=>new Date(ts).toISOString().substring(0,13))
+									}]
+								})
+							}
+							chart.hideLoading();
+							$("div#container").css("overflow","scroll");
+							$("div#container").show();
+							document.body.style.cursor = "default";
+							console.log("chart updated");
+						})
+						.fail( () => {
+							alert("get densidad failed!");
+							// chart.hideLoading();
+							document.body.style.cursor = "default";
+						})
+					})
+				})
+				.fail( () => {
+					alert("get fuentes failed!");
+					chart.hideLoading();
+					document.body.style.cursor = "default";
+				})
+			}
+			$("form.getdensprono").submit(getDensProno)
+			function getDensProno(e) {
+				e.preventDefault()
+				var formdata = $(e.target).serializeArray()
+				console.log({formdata:formdata})
+				var formdict = {}
+				formdata.forEach(it=>{
+					formdict[it.name] = it.value
+				})
+				var url = "densidad/pronosticos"
+				var title = 'Pronósticos por calibrado e intervalo temporal'
+				document.body.style.cursor = "progress";
+				chart.showLoading();
+				var chartwidth = $(window).width()
+				$.get("cal", (calibrados,status) => {
+					var heatmapdata = []
+					var chartheight = (calibrados.length * 30 > 500) ?  calibrados.length * 30 : 500 
+					document.body.style.cursor = "default"
+					var maxvalue = 0
+					chart.update({
+						title: {
+							text: title
+						},
+						subtitle: {
+							text: ""
+						},
+						yAxis:{
+							categories: calibrados.map(it=>it.nombre),
+							min: 0,
+							max: calibrados.length-1
+						},
+						colorAxis: {
+							min: 0,
+							max: maxvalue
+						},
+						chart: {
+							height: chartheight,
+							width: chartwidth
+						},
+						series: [{
+							name: title,
+							borderWidth: 0,
+							data: [],
+							dataLabels: {
+								enabled: true,
+								color: '#000000'
+							}
+						}]
+					})
+					calibrados.forEach((calibrado,i)=>{
+						var cal_id = calibrado.id
+						var thisformdata = [...formdata]
+						thisformdata.push({name:"cal_id", value: cal_id})
 						thisformdata.push({name:"include_timestamps", value: true})
 						var querystring = thisformdata.map(x=>{
 							return x.name + "=" + x.value
