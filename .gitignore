@@ -1,3 +1,5 @@
 config/default.json
 sessions
 sql/heatmap_dump.py
+node_modules
+package_.json

@@ -7,7 +7,7 @@ const fs = require('fs').promises
 const request = require('request-promise')
 const exphbs = require('express-handlebars')
 var sprintf = require('sprintf-js').sprintf, vsprintf = require('sprintf-js').vsprintf
-app.engine('handlebars', exphbs({defaultLayout: 'main'}));
+app.engine('handlebars', exphbs.engine({defaultLayout: 'main'})); // app.engine('handlebars', exphbs({defaultLayout: 'main'}));
 app.set('view engine', 'handlebars');
 const config = require('config')
 app.use(express.static('public'));
@@ -24,6 +24,7 @@ const passport = auth.passport
 
 const Heatmap = require("./heatmap")
 const heatmap = new Heatmap.heatmap(pool)
+const {control_filter2} = require('./utils')
 
 app.get('/exit',auth.isAdmin,(req,res)=>{  // terminate Nodejs process
 	res.status(200).send("Terminating Nodejs process")
@@ -44,6 +45,7 @@ app.get('/var',getvar)
 app.get('/proc',getproc)
 app.get('/unit',getunit)
 app.get('/cal',getcal)
+app.get('/cal_grupo',getcalgrupo)
 app.get('/fuentes',getfuentes)
 app.get('/seriesrast',getseriesrast)
 
@@ -438,7 +440,8 @@ function getunitlist(id) {
 }
 
 function getcal(req,res) {
-	getcallist(req.query.calId)
+	var filter = getDensityFilter(req.query)
+	getcallist(filter)
 	.then(list=> {
 		res.send(list)
 		console.log("callist sent")
@@ -449,25 +452,106 @@ function getcal(req,res) {
 	})
 }
 
-function getcallist(id) {
+function getcallist(filter={}) {
 	var stmt
-	if(!id) {
-		// return all vars
-		stmt="SELECT id,nombre from calibrados WHERE activar=true order by id"
-	} else if (/^\d+$/.test(id)) {
-		//  id numérico
-		console.log("id numerico:"+id)
-		stmt = "SELECT id,nombre from calibrados where activar=true AND id=" + id
-	} else {
-		// id varchar
-		console.log("invalid calId:"+id)
-		return Promise.reject("Error: parametro calId posee caracteres no válidos")
+	const series_table = (filter.tipo == "areal") ? "series_areal" : (filter.tipo == "raster" || filter.tipo == "rast") ? "series_rast" : "series"
+	const valid_filters = {
+		cal_grupo_id: {type: "integer", column: "grupo_id"},
+		cal_id: {type: "integer", column: "id"},
+		series_id: {table: "series_prono_date_range", type: "integer"},
+		var_id: {table: series_table, type: "integer"},
+		unit_id: {table: series_table, type: "integer"}
 	}
+	if(series_table == "series") {
+		valid_filters.estacion_id = {table: series_table, type: "integer"}
+	} else if (series_table == "series_areal") {
+		valid_filters.area_id = {table: series_table, type: "integer", alias: "estacion_id"}
+	} else if (series_table == "series_rast") {
+		valid_filters.escena_id = {table: series_table, type: "integer", alias: "estacion_id"}
+	}
+	try {
+		var filter_string = control_filter2(
+			valid_filters,
+			filter, 
+			"calibrados",
+			undefined,
+			true
+		)
+	} catch(e) {
+		throw(new Error("Al menos uno de los filtros no es válido: " + e.toString()))
+	}
+	// stmt=
+	// `
+	// 	SELECT 
+	// 		id,
+	// 		nombre 
+	// 	from calibrados 
+	// 	WHERE activar=true 
+	// 	${filter_string}
+	// 	order by id`
+	stmt = `SELECT 
+			calibrados.id,
+			calibrados.nombre 
+		FROM calibrados 
+		JOIN corridas ON corridas.cal_id=calibrados.id
+		LEFT JOIN series_prono_date_range ON series_prono_date_range.cor_id=corridas.id
+		LEFT JOIN ${series_table} ON series_prono_date_range.series_id=${series_table}.id
+		WHERE calibrados.activar=true 
+		AND series_prono_date_range.series_table = '${series_table}'
+		${filter_string}
+		GROUP BY calibrados.id, calibrados.nombre;
+		`
+	console.debug(stmt)
 	return pool.query(stmt)
 	.then(result=>{
 		return result.rows
 	})
 }
+
+function getcalgrupo(req,res) {
+	var filter = getDensityFilter(req.query)
+	getcalgrupolist(filter.calGrupoId)
+	.then(list=> {
+		res.send(list)
+		console.log("calgrupolist sent")
+	})
+	.catch(e=> {
+		console.log(e)
+		res.status(500).send({message:"Query error",error:e})
+	})
+}
+
+function getcalgrupolist(grupo_id) {
+	var stmt
+	try {
+		var filter_string = control_filter2(
+			{
+				"grupo_id": {"type": "integer"}
+			},
+			{
+				grupo_id: grupo_id
+			}, 
+			"calibrados_grupos",
+			undefined,
+			true
+		)
+	} catch(e) {
+		throw(new Error("Parametro calGrupoId posee caracteres no válidos: " + e.toString()))
+	}
+	stmt=`
+		SELECT 
+			id,
+			nombre 
+		FROM calibrados_grupos 
+		WHERE 1=1 
+		${filter_string}
+		order by id`
+	return pool.query(stmt)
+	.then(result=>{
+		return result.rows
+	})
+}
+
 
 function getfuentes(req,res) {
 	getfuenteslist(req.query.calId)
@@ -851,10 +935,7 @@ function arr2csv(arr) {
 // densityVectors
 
 function getObsDensityVector(req,res) {
-	var filter = {...req.query}
-	delete filter.timestart
-	delete filter.timeend
-	delete filter.dt
+	var filter = getDensityFilter(req.query)
 	var options = {
 		include_timestamps: (req.query.include_timestamps) ? true : false,
 		format: (req.query.format) ? req.query.format : undefined
@@ -870,10 +951,7 @@ function getObsDensityVector(req,res) {
 }
 
 function getObsArealDensityVector(req,res) {
-	var filter = {...req.query}
-	delete filter.timestart
-	delete filter.timeend
-	delete filter.dt
+	var filter = getDensityFilter(req.query)
 	var options = {
 		include_timestamps: (req.query.include_timestamps) ? true : false,
 		format: (req.query.format) ? req.query.format : undefined
@@ -889,10 +967,7 @@ function getObsArealDensityVector(req,res) {
 }
 
 function getObsRastDensityVector(req,res) {
-	var filter = {...req.query}
-	delete filter.timestart
-	delete filter.timeend
-	delete filter.dt
+	var filter = getDensityFilter(req.query)
 	var options = {
 		include_timestamps: (req.query.include_timestamps) ? true : false,
 		format: (req.query.format) ? req.query.format : undefined
@@ -908,10 +983,7 @@ function getObsRastDensityVector(req,res) {
 }
 
 function getStationDensityVector(req,res) {
-	var filter = {...req.query}
-	delete filter.timestart
-	delete filter.timeend
-	delete filter.dt
+	var filter = getDensityFilter(req.query)
 	var options = {
 		include_timestamps: (req.query.include_timestamps) ? true : false,
 		format: (req.query.format) ? req.query.format : undefined
@@ -926,11 +998,24 @@ function getStationDensityVector(req,res) {
 	})
 }
 
-function getPronoDensityVector(req,res) {
-	var filter = {...req.query}
+function getDensityFilter(query) {
+	var filter = {...query}
 	delete filter.timestart
 	delete filter.timeend
 	delete filter.dt
+
+	for(const key of Object.keys(filter)) {
+		if(filter[key] == undefined || filter[key] == "") {
+			delete filter[key]
+		}
+	}
+
+	return filter
+}
+
+function getPronoDensityVector(req,res) {
+	var filter = getDensityFilter(req.query)
+	
 	var options = {
 		include_timestamps: (req.query.include_timestamps) ? true : false,
 		format: (req.query.format) ? req.query.format : undefined

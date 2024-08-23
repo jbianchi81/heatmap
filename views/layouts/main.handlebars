@@ -441,6 +441,14 @@
 					<table class=form>
 						<tr>
 							<td>
+								<label for=estacion_id>estacion:</label>
+							</td>
+							<td>
+								<input type=integer class=estacionId name=estacion_id value="" />
+							</td>
+						</tr>
+						<tr>
+							<td>
 								<label for=var_id>variable:</label>
 							</td>
 							<td>
@@ -455,6 +463,24 @@
 							</td>
 							<td>
 								<select type=integer class=unitId name=unit_id value="">
+									<option selected value> -- any --</option>
+								</select>
+							</td>
+						</tr>
+						<tr>
+							<td>
+								<label for=series_id>Serie:</label>
+							</td>
+							<td>
+								<input type=integer class=seriesId name=series_id value="" />
+							</td>
+						</tr>
+						<tr>
+							<td>
+								<label for=cal_grupo_id>Grupo de calibrados:</label>
+							</td>
+							<td>
+								<select type=integer class=calGrupoId name=cal_grupo_id value="">
 									<option selected value> -- any --</option>
 								</select>
 							</td>
@@ -500,8 +526,8 @@
 							</td>
 							<td>
 								<select type=text class=count name=count>
-									<option value="observaciones" selected>pronósticos</option>
-									{{!-- <option value="estaciones">estaciones</option> --}}
+									<option value="pronosticos" selected>pronósticos</option>
+									<option value="corridas">corridas</option>
 								</select>
 							</td>
 						<tr>
@@ -676,6 +702,20 @@
 							value: it.id,
 							text: it.nombre + " (" + it.id + ")",
 							appendTo: $("select.unitId")
+							}
+						)
+					})
+					return 
+				})
+			}
+			function getCalGrupoId() {
+				$("select.calGrupoId").empty().append("<option selected value> -- any -- </option>");
+				return $.get("cal_grupo", (data,status) => {
+					data.map(it=> {
+						$("<option></option>", {
+							value: it.id,
+							text: it.nombre + " (" + it.id + ")",
+							appendTo: $("select.calGrupoId")
 							}
 						)
 					})
@@ -1081,7 +1121,11 @@
 				document.body.style.cursor = "progress";
 				chart.showLoading();
 				var chartwidth = $(window).width()
-				$.get("cal", (calibrados,status) => {
+				const cal_query_string = formdata.map(x=>{
+							return x.name + "=" + x.value
+						}).join("&")
+				// const cal_query_string = (formdict.cal_grupo_id != undefined) ? `?calGrupoId=${formdict.cal_grupo_id}` : ""
+				$.get("cal?" + cal_query_string, (calibrados,status) => {
 					var heatmapdata = []
 					var chartheight = (calibrados.length * 30 > 500) ?  calibrados.length * 30 : 500 
 					document.body.style.cursor = "default"
@@ -1094,7 +1138,7 @@
 							text: ""
 						},
 						yAxis:{
-							categories: calibrados.map(it=>it.nombre),
+							categories: calibrados.map(it=> `${it.id} - ${it.nombre}`),
 							min: 0,
 							max: calibrados.length-1
 						},
@@ -1227,6 +1271,17 @@
 				console.log("Listado de unidades obtenido")
 				if(urlParams.has('unit_id')) {
 					$("select[name=unit_id]").val(urlParams.get('unit_id'));
+				}
+				// $("select.tabla").change();
+			})
+			getCalGrupoId()
+			.fail((e) => {
+				alert("Falla al intentar obtener listado de grupos de calibrados")
+			})
+			.done(()=> {
+				console.log("Listado de grupos de calibrados obtenido")
+				if(urlParams.has('cal_grupo_id')) {
+					$("select[name=cal_grupo_id]").val(urlParams.get('cal_grupo_id'));
 				}
 				// $("select.tabla").change();
 			})
