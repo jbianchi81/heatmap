@@ -181,6 +181,7 @@ internal.heatmap = class {
      * @param {integer} filter.escena_id
      * @param {integer} filter.tabla_id
      * @param {integer} filter.estacion_id
+     * @param {Date} filter.forecast_date
      * @param {('pronosticos','corridas')} [filter.count] - default pronosticos
      * @param {Object} [options]
      * @param {string} options.format 
@@ -204,14 +205,18 @@ internal.heatmap = class {
             "var_id": {type:"integer"},
             "unit_id":{type:"integer"},
             "proc_id":{type:"integer"},
-            "series_id":{type:"integer", column: "id"}
+            "series_id":{type:"integer", column: "id"},
         }
         if(filter.count == "corridas") {
             valid_filters.cal_id = {table: "corridas",type: "integer"}
             valid_filters.cal_grupo_id = {table: "calibrados",type:"integer", column: "grupo_id"}
+            valid_filters.cor_id = {table: "corridas",type: "integer", column: "id"}
+            valid_filters.forecast_date = {table: "corridas", type: "date", column: "date"}
         } else {            
             valid_filters.cal_id = {table:"series_prono_date_range_last",type:"integer"},
             valid_filters.cal_grupo_id = {table:"series_prono_date_range_last",type:"integer"}
+            valid_filters.cor_id = {table: "series_prono_date_range_last",type: "integer"}
+            valid_filters.forecast_date = {table: "series_prono_date_range_last", type: "date"}
         }
         if(filter.tipo == "areal") {
             var prono_table =  "pronosticos_areal"

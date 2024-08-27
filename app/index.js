@@ -7,7 +7,7 @@ const fs = require('fs').promises
 const request = require('request-promise')
 const exphbs = require('express-handlebars')
 var sprintf = require('sprintf-js').sprintf, vsprintf = require('sprintf-js').vsprintf
-app.engine('handlebars', exphbs.engine({defaultLayout: 'main'})); // app.engine('handlebars', exphbs({defaultLayout: 'main'}));
+app.engine('handlebars', exphbs({defaultLayout: 'main'})); // app.engine('handlebars', exphbs({defaultLayout: 'main'}));
 app.set('view engine', 'handlebars');
 const config = require('config')
 app.use(express.static('public'));
@@ -440,8 +440,9 @@ function getunitlist(id) {
 }
 
 function getcal(req,res) {
-	var filter = getDensityFilter(req.query)
-	getcallist(filter)
+	var filter = getCalFilter(req.query)
+	var options = getCalOptions(req.query)
+	getcallist(filter,options)
 	.then(list=> {
 		res.send(list)
 		console.log("callist sent")
@@ -452,15 +453,34 @@ function getcal(req,res) {
 	})
 }
 
-function getcallist(filter={}) {
+/**
+ * 
+ * @param {Object} filter 
+ * @param {integer}	filter.cal_grupo_id
+ * @param {integer} filter.cal_id
+ * @param {integer}	filter.series_id
+ * @param {integer}	filter.var_id
+ * @param {integer}	filter.unit_id
+ * @param {integer}	filter.estacion_id
+ * @param {integer}	filter.area_id
+ * @param {integer}	filter.escena_id
+ * @param {Object} options 
+ * @param {boolean} options.get_series 
+ * @param {string} options.count - pronosticos or corridas
+ * @returns {Object[]} calibrados list
+ */
+function getcallist(filter={}, options={}) {
 	var stmt
 	const series_table = (filter.tipo == "areal") ? "series_areal" : (filter.tipo == "raster" || filter.tipo == "rast") ? "series_rast" : "series"
+	const date_range_table = (options.count == "pronosticos") ? "series_prono_date_range_last" : "series_prono_date_range"
 	const valid_filters = {
 		cal_grupo_id: {type: "integer", column: "grupo_id"},
 		cal_id: {type: "integer", column: "id"},
-		series_id: {table: "series_prono_date_range", type: "integer"},
+		series_id: {table: date_range_table, type: "integer"},
 		var_id: {table: series_table, type: "integer"},
-		unit_id: {table: series_table, type: "integer"}
+		unit_id: {table: series_table, type: "integer"},
+		timestart: {table: date_range_table, type: "timestart", column: "end_date"},
+		timeend: {table: date_range_table, type: "timeend", column: "begin_date"}
 	}
 	if(series_table == "series") {
 		valid_filters.estacion_id = {table: series_table, type: "integer"}
@@ -491,13 +511,14 @@ function getcallist(filter={}) {
 	// 	order by id`
 	stmt = `SELECT 
 			calibrados.id,
-			calibrados.nombre 
+			calibrados.nombre
+			${(options.get_series) ?  `, json_agg(row_to_json(${date_range_table}.*)) series` : ""}			 
 		FROM calibrados 
 		JOIN corridas ON corridas.cal_id=calibrados.id
-		LEFT JOIN series_prono_date_range ON series_prono_date_range.cor_id=corridas.id
-		LEFT JOIN ${series_table} ON series_prono_date_range.series_id=${series_table}.id
+		LEFT JOIN ${date_range_table} ON ${date_range_table}.cor_id=corridas.id
+		LEFT JOIN ${series_table} ON ${date_range_table}.series_id=${series_table}.id
 		WHERE calibrados.activar=true 
-		AND series_prono_date_range.series_table = '${series_table}'
+		AND ${date_range_table}.series_table = '${series_table}'
 		${filter_string}
 		GROUP BY calibrados.id, calibrados.nombre;
 		`
@@ -1011,6 +1032,37 @@ function getDensityFilter(query) {
 	}
 
 	return filter
+}
+
+function getCalFilter(query) {
+	var filter = {...query}
+	delete filter.dt
+
+	for(const key of Object.keys(filter)) {
+		if(filter[key] == undefined || filter[key] == "") {
+			delete filter[key]
+		}
+	}
+
+	return filter
+}
+
+
+function getCalOptions(query) {
+	var options = {}
+	const valid_options = [
+		"get_series",
+		"count"
+	]
+	for(const option of valid_options) {
+		if(Object.keys(query).indexOf(option) >= 0) {
+			if(query[option] == undefined || query[options] == "") {
+				continue
+			}
+			options[option] = query[option]
+		}
+	}
+	return options
 }
 
 function getPronoDensityVector(req,res) {

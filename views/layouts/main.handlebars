@@ -485,6 +485,22 @@
 								</select>
 							</td>
 						</tr>
+						{{!-- <tr>
+							<td>
+								<label for=forecast_date>Fecha de emisión:</label>
+							</td>
+							<td>
+								<input type=date-time class=forecastDate name=forecast_date value="" />
+							</td>
+						</tr> --}}
+
+							<td>
+								<label for=cal_id>Id de calibrado:</label>
+							</td>
+							<td>
+								<input type=number class=calId name=cal_id value="" />
+							</td>
+						</tr>
 						<tr>
 							<td>
 								<label for=timestart>Fecha inicial:</label>
@@ -530,6 +546,15 @@
 									<option value="corridas">corridas</option>
 								</select>
 							</td>
+						</tr>
+						<tr>
+							<td>
+								<label for="get_series">Separar series</label>
+							</td>
+							<td>
+								<input type="checkbox" name="get_series" />
+							</td>
+						</tr>
 						<tr>
 							<td colspan=2>
 								<button type=submit >Cargar datos</button>
@@ -546,6 +571,14 @@
 			$( function() {
 				$( "#control" ).tabs();
 			});
+			const default_prono_timestart = new Date(new Date().getUTCFullYear(), new Date().getUTCMonth() - 1, new Date().getUTCDate())
+			const default_prono_timeend = new Date(new Date().getUTCFullYear(), new Date().getUTCMonth(), new Date().getUTCDate() + 14)
+			if($("form.getdensprono input[name=timestart]").val() == "") {
+				$("form.getdensprono input[name=timestart]").val(default_prono_timestart.toISOString().substring(0,10))
+			}
+			if($("form.getdensprono input[name=timeend]").val() == "") {
+				$("form.getdensprono input[name=timeend]").val(default_prono_timeend.toISOString().substring(0,10))
+			}
 			//~ $("form#getheatmap").submit()
 			$("form.getheatmap").submit(getData)
 			function getData(e) {
@@ -1111,6 +1144,7 @@
 			function getDensProno(e) {
 				e.preventDefault()
 				var formdata = $(e.target).serializeArray()
+				// var form_data = new FormData(e.target);
 				console.log({formdata:formdata})
 				var formdict = {}
 				formdata.forEach(it=>{
@@ -1126,10 +1160,12 @@
 						}).join("&")
 				// const cal_query_string = (formdict.cal_grupo_id != undefined) ? `?calGrupoId=${formdict.cal_grupo_id}` : ""
 				$.get("cal?" + cal_query_string, (calibrados,status) => {
-					var heatmapdata = []
-					var chartheight = (calibrados.length * 30 > 500) ?  calibrados.length * 30 : 500 
+					var y_axis_length = (formdict.get_series) ? calibrados.reduce((a, b)=> a + b.series.length, 0) - 1 : calibrados.length - 1
+					console.log({y_axis_length: y_axis_length})
+					var chartheight = (y_axis_length * 30 > 500) ?  y_axis_length * 30 : 500 
 					document.body.style.cursor = "default"
 					var maxvalue = 0
+					var y_axis_categories = (formdict.get_series) ? calibrados.map(cal=> cal.series.map(serie=> `${cal.id} - ${serie.series_id} - ${serie.cor_id}`)).flat() : calibrados.map(it=> `${it.id} - ${it.nombre}`)
 					chart.update({
 						title: {
 							text: title
@@ -1138,9 +1174,9 @@
 							text: ""
 						},
 						yAxis:{
-							categories: calibrados.map(it=> `${it.id} - ${it.nombre}`),
+							categories: y_axis_categories,
 							min: 0,
-							max: calibrados.length-1
+							max: y_axis_length
 						},
 						colorAxis: {
 							min: 0,
@@ -1160,6 +1196,11 @@
 							}
 						}]
 					})
+					if(formdict["get_series"]) {
+						plotDensPronoBySerie(chart, calibrados, status, formdict, url, maxvalue)
+						return
+					}
+					var heatmapdata = []				
 					calibrados.forEach((calibrado,i)=>{
 						var cal_id = calibrado.id
 						var thisformdata = [...formdata]
@@ -1377,13 +1418,78 @@
 				}]
 
 			});
+		
+			function getTipo(series_table="series") {
+				if(series_table == "series_areal") {
+					return "areal"
+				} else if(series_table == "series_rast") {
+					return "raster"
+				} else {
+					return "puntual"
+				}
+			}
 
-
-			
-			//~ }); 
-			
-				
-			
+			function plotDensPronoBySerie(chart, calibrados, status, formdict, url, maxvalue) {
+				var heatmapdata = []
+				var i = 0
+				for(const calibrado of calibrados) {
+					var cal_id = calibrado.id
+					for(const serie of calibrado.series) {
+						var thisformdict = {...formdict}
+						thisformdict.cal_id = cal_id
+						thisformdict.include_timestamps = true
+						thisformdict.series_id = serie.series_id
+						thisformdict.cor_id = serie.cor_id
+						thisformdict.tipo = getTipo(serie.series_table)
+						var querystring = Object.keys(thisformdict).map(key =>
+							`${key}=${thisformdict[key]}`
+						).join("&")
+						console.log(querystring)
+						$.get(url + "?" + querystring, (data,status) => {
+							if(status !== 'success') {
+								// chart.hideLoading();
+								alert("get densidad error! Status:" + status)
+								document.body.style.cursor = "default";
+								return
+							}
+							if(!data || !data.values || !Array.isArray(data.values)) {
+								// chart.hideLoading();
+								alert("get densidad error! Not found")
+								// document.body.style.cursor = "default";
+								return
+							}
+							heatmapdata = heatmapdata.concat(data.values.map((it,j)=>{
+								if(it > maxvalue) {
+									maxvalue = it
+								}
+								return [j,i,it]
+							}))
+							var chartwidth = $(window).width()
+							chart.series[0].setData(heatmapdata)
+							if(i==0) {  
+								chart.update({
+									xAxis: [{
+										categories: data.timestamps.map(ts=>new Date(ts).toISOString().substring(0,13))
+									},{
+										categories: data.timestamps.map(ts=>new Date(ts).toISOString().substring(0,13))
+									}]
+								})
+							}
+							i = i + 1
+							chart.hideLoading();
+							$("div#container").css("overflow","scroll");
+							$("div#container").show();
+							document.body.style.cursor = "default";
+							console.log("chart updated");
+						})
+						.fail( () => {
+							alert("get densidad failed!");
+							// chart.hideLoading();
+							document.body.style.cursor = "default";
+						})
+					}
+				}
+			}			
 		</script>
 	</body>
 </html>
