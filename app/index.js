@@ -7,7 +7,7 @@ const fs = require('fs').promises
 const request = require('request-promise')
 const exphbs = require('express-handlebars')
 var sprintf = require('sprintf-js').sprintf, vsprintf = require('sprintf-js').vsprintf
-app.engine('handlebars', exphbs({defaultLayout: 'main'})); // app.engine('handlebars', exphbs({defaultLayout: 'main'}));
+app.engine('handlebars', exphbs.engine({defaultLayout: 'main'})); // app.engine('handlebars', exphbs({defaultLayout: 'main'}));
 app.set('view engine', 'handlebars');
 const config = require('config')
 app.use(express.static('public'));

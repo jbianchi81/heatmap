@@ -1176,7 +1176,24 @@
 						yAxis:{
 							categories: y_axis_categories,
 							min: 0,
-							max: y_axis_length
+							max: y_axis_length,
+							labels: {
+								formatter: (formdict.get_series) ? 
+									function() {
+										const ids = this.value.split(" - ")
+										return `<a class=prono_link href="https://alerta.ina.gob.ar/a6/sim/calibrados/${ids[0]}/corridas/${ids[2]}?series_id=${ids[1]}&includeProno=true&timestart=${formdict["timestart"]}&timeend=${formdict["timeend"]}" target=_blank>${this.value}</a>`
+									}
+									: (formdict.count == "corridas") ?
+										function() {
+										const ids = this.value.split(" - ")
+											return `<a class=prono_link href="https://alerta.ina.gob.ar/a6/sim/calibrados/${ids[0]}/corridas?includeProno=true&forecast_timestart=${formdict["timestart"]}&forecast_timeend=${formdict["timeend"]}" target=_blank>${this.value}</a>`
+										}
+									:
+										function() {
+										const ids = this.value.split(" - ")
+											return `<a class=prono_link href="https://alerta.ina.gob.ar/a6/sim/calibrados/${ids[0]}/corridas/last?includeProno=true&timestart=${formdict["timestart"]}&timeend=${formdict["timeend"]}" target=_blank>${this.value}</a>`
+										}
+							}
 						},
 						colorAxis: {
 							min: 0,
@@ -1430,6 +1447,9 @@
 			}
 
 			function plotDensPronoBySerie(chart, calibrados, status, formdict, url, maxvalue) {
+				chart.yAxis.formatter = {
+					
+				}
 				var heatmapdata = []
 				var i = 0
 				for(const calibrado of calibrados) {
