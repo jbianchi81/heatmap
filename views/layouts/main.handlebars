@@ -1180,16 +1180,25 @@
 							labels: {
 								formatter: (formdict.get_series) ? 
 									function() {
+										if(!this.value.split) {
+											return this.value
+										}
 										const ids = this.value.split(" - ")
 										return `<a class=prono_link href="https://alerta.ina.gob.ar/a6/sim/calibrados/${ids[0]}/corridas/${ids[2]}?series_id=${ids[1]}&includeProno=true&timestart=${formdict["timestart"]}&timeend=${formdict["timeend"]}" target=_blank>${this.value}</a>`
 									}
 									: (formdict.count == "corridas") ?
 										function() {
+										if(!this.value.split) {
+											return this.value
+										}
 										const ids = this.value.split(" - ")
 											return `<a class=prono_link href="https://alerta.ina.gob.ar/a6/sim/calibrados/${ids[0]}/corridas?includeProno=true&forecast_timestart=${formdict["timestart"]}&forecast_timeend=${formdict["timeend"]}" target=_blank>${this.value}</a>`
 										}
 									:
 										function() {
+										if(!this.value.split) {
+											return this.value
+										}
 										const ids = this.value.split(" - ")
 											return `<a class=prono_link href="https://alerta.ina.gob.ar/a6/sim/calibrados/${ids[0]}/corridas/last?includeProno=true&timestart=${formdict["timestart"]}&timeend=${formdict["timeend"]}" target=_blank>${this.value}</a>`
 										}
@@ -1217,7 +1226,10 @@
 						plotDensPronoBySerie(chart, calibrados, status, formdict, url, maxvalue)
 						return
 					}
-					var heatmapdata = []				
+					var heatmapdata = []	
+					if(y_axis_length == -1) {
+						alert("No se encontraron calibrados")
+					}			
 					calibrados.forEach((calibrado,i)=>{
 						var cal_id = calibrado.id
 						var thisformdata = [...formdata]
