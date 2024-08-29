@@ -471,23 +471,24 @@ function getcal(req,res) {
  */
 function getcallist(filter={}, options={}) {
 	var stmt
-	const series_table = (filter.tipo == "areal") ? "series_areal" : (filter.tipo == "raster" || filter.tipo == "rast") ? "series_rast" : "series"
 	const date_range_table = (options.count == "pronosticos") ? "series_prono_date_range_last" : "series_prono_date_range"
 	const valid_filters = {
 		cal_grupo_id: {type: "integer", column: "grupo_id"},
 		cal_id: {type: "integer", column: "id"},
-		series_id: {table: date_range_table, type: "integer"},
-		var_id: {table: series_table, type: "integer"},
-		unit_id: {table: series_table, type: "integer"},
-		timestart: {table: date_range_table, type: "timestart", column: "end_date"},
-		timeend: {table: date_range_table, type: "timeend", column: "begin_date"}
+		series_id: {table: "series_with_date_range", type: "integer"},
+		var_id: {table: "series_with_date_range", type: "integer"},
+		unit_id: {table: "series_with_date_range", type: "integer"},
+		timestart: {table: "series_with_date_range", type: "timestart", column: "end_date"},
+		timeend: {table: "series_with_date_range", type: "timeend", column: "begin_date"},
+		tipo: {table: "series_with_date_range", type: "string"}
 	}
-	if(series_table == "series") {
-		valid_filters.estacion_id = {table: series_table, type: "integer"}
-	} else if (series_table == "series_areal") {
-		valid_filters.area_id = {table: series_table, type: "integer", alias: "estacion_id"}
-	} else if (series_table == "series_rast") {
-		valid_filters.escena_id = {table: series_table, type: "integer", alias: "estacion_id"}
+	if(filter.tipo == "areal") {
+		valid_filters.estacion_id = {table: "series_with_date_range", type: "integer", alias: "area_id"}
+	} else if(filter.tipo == "raster") {
+		valid_filters.estacion_id = {table: "series_with_date_range", type: "integer", alias: "escena_id"}
+	} else {
+		filter.tipo = "puntual"
+		valid_filters.estacion_id = {table: "series_with_date_range", type: "integer"}
 	}
 	try {
 		var filter_string = control_filter2(
@@ -512,13 +513,39 @@ function getcallist(filter={}, options={}) {
 	stmt = `SELECT 
 			calibrados.id,
 			calibrados.nombre
-			${(options.get_series) ?  `, json_agg(row_to_json(${date_range_table}.*)) series` : ""}			 
+			${(options.get_series) ?  `, json_agg(row_to_json(series_with_date_range.*)) series` : ""}			 
 		FROM calibrados 
 		JOIN corridas ON corridas.cal_id=calibrados.id
-		LEFT JOIN ${date_range_table} ON ${date_range_table}.cor_id=corridas.id
-		LEFT JOIN ${series_table} ON ${date_range_table}.series_id=${series_table}.id
-		WHERE calibrados.activar=true 
-		AND ${date_range_table}.series_table = '${series_table}'
+		LEFT JOIN (
+			SELECT 
+				${date_range_table}.series_id, 
+				${date_range_table}.series_table,
+				${date_range_table}.estacion_id,
+				${date_range_table}.tabla,
+				${date_range_table}.var_id,
+				${date_range_table}.cor_id,
+				${date_range_table}.begin_date,
+				${date_range_table}.end_date,
+				${date_range_table}.count,
+				${date_range_table}.qualifiers,
+				series_union_all_with_names.tipo,
+				series_union_all_with_names.proc_id,
+				series_union_all_with_names.unit_id,
+				series_union_all_with_names.fuentes_id,
+				series_union_all_with_names.nombre,
+				series_union_all_with_names.fuentes_nombre,
+				series_union_all_with_names.var_var,
+				series_union_all_with_names.var_nombre,
+				series_union_all_with_names."var_timeSupport",
+				series_union_all_with_names.proc_nombre,
+				series_union_all_with_names.unit_nombre
+			FROM ${date_range_table} 
+			JOIN ${"series_union_all_with_names"} 
+				ON ${date_range_table}.series_id = series_union_all_with_names.id
+				AND ${date_range_table}.series_table = get_series_table(series_union_all_with_names.tipo)
+		) AS series_with_date_range 
+			ON series_with_date_range.cor_id = corridas.id
+		WHERE calibrados.activar = true 
 		${filter_string}
 		GROUP BY calibrados.id, calibrados.nombre;
 		`

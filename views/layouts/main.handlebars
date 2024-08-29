@@ -1141,7 +1141,7 @@
 				})
 			}
 			$("form.getdensprono").submit(getDensProno)
-			function getDensProno(e) {
+			async function getDensProno(e) {
 				e.preventDefault()
 				var formdata = $(e.target).serializeArray()
 				// var form_data = new FormData(e.target);
@@ -1159,105 +1159,113 @@
 							return x.name + "=" + x.value
 						}).join("&")
 				// const cal_query_string = (formdict.cal_grupo_id != undefined) ? `?calGrupoId=${formdict.cal_grupo_id}` : ""
-				$.get("cal?" + cal_query_string, (calibrados,status) => {
-					var y_axis_length = (formdict.get_series) ? calibrados.reduce((a, b)=> a + b.series.length, 0) - 1 : calibrados.length - 1
-					console.log({y_axis_length: y_axis_length})
-					var chartheight = (y_axis_length * 30 > 500) ?  y_axis_length * 30 : 500 
-					document.body.style.cursor = "default"
-					var maxvalue = 0
-					var y_axis_categories = (formdict.get_series) ? calibrados.map(cal=> cal.series.map(serie=> `${cal.id} - ${serie.series_id} - ${serie.cor_id}`)).flat() : calibrados.map(it=> `${it.id} - ${it.nombre}`)
-					chart.update({
-						title: {
-							text: title
-						},
-						subtitle: {
-							text: ""
-						},
-						yAxis:{
-							categories: y_axis_categories,
-							min: 0,
-							max: y_axis_length
-						},
-						colorAxis: {
-							min: 0,
-							max: maxvalue
-						},
-						chart: {
-							height: chartheight,
-							width: chartwidth
-						},
-						series: [{
-							name: title,
-							borderWidth: 0,
-							data: [],
-							dataLabels: {
-								enabled: true,
-								color: '#000000'
-							}
-						}]
-					})
-					if(formdict["get_series"]) {
-						plotDensPronoBySerie(chart, calibrados, status, formdict, url, maxvalue)
-						return
-					}
-					var heatmapdata = []				
-					calibrados.forEach((calibrado,i)=>{
-						var cal_id = calibrado.id
-						var thisformdata = [...formdata]
-						thisformdata.push({name:"cal_id", value: cal_id})
-						thisformdata.push({name:"include_timestamps", value: true})
-						var querystring = thisformdata.map(x=>{
-							return x.name + "=" + x.value
-						}).join("&")
-						console.log(querystring)
-						$.get(url + "?" + querystring, (data,status) => {
-							if(status !== 'success') {
-								// chart.hideLoading();
-								alert("get densidad error! Status:" + status)
-								document.body.style.cursor = "default";
-								return
-							}
-							if(!data || !data.values || !Array.isArray(data.values)) {
-								// chart.hideLoading();
-								alert("get densidad error! Not found")
-								// document.body.style.cursor = "default";
-								return
-							}
-							heatmapdata = heatmapdata.concat(data.values.map((it,j)=>{
-								if(it > maxvalue) {
-									maxvalue = it
-								}
-								return [j,i,it]
-							}))
-							var chartwidth = $(window).width()
-							chart.series[0].setData(heatmapdata)
-							if(i==0) {  
-								chart.update({
-									xAxis: [{
-										categories: data.timestamps.map(ts=>new Date(ts).toISOString().substring(0,13))
-									},{
-										categories: data.timestamps.map(ts=>new Date(ts).toISOString().substring(0,13))
-									}]
-								})
-							}
-							chart.hideLoading();
-							$("div#container").css("overflow","scroll");
-							$("div#container").show();
-							document.body.style.cursor = "default";
-							console.log("chart updated");
-						})
-						.fail( () => {
-							alert("get densidad failed!");
-							// chart.hideLoading();
-							document.body.style.cursor = "default";
-						})
-					})
-				})
-				.fail( () => {
-					alert("get fuentes failed!");
+				try {
+					var calibrados = await $.get("cal?" + cal_query_string)
+				} catch(e) {
+					console.error(e)
+					alert("get calibrados failed!");
 					chart.hideLoading();
 					document.body.style.cursor = "default";
+					return
+				}		
+				var y_axis_length = (formdict.get_series) ? calibrados.reduce((a, b)=> a + b.series.length, 0) - 1 : calibrados.length - 1
+				console.log({y_axis_length: y_axis_length})
+				var chartheight = (y_axis_length * 30 > 500) ?  y_axis_length * 30 : 500 
+				document.body.style.cursor = "default"
+				var maxvalue = 0
+				var y_axis_categories = (formdict.get_series) ? calibrados.map(cal=> cal.series.map(serie=> `${cal.id} - ${serie.series_id} - ${serie.cor_id}`)).flat() : calibrados.map(it=> `${it.id} - ${it.nombre}`)
+				chart.update({
+					title: {
+						text: title
+					},
+					subtitle: {
+						text: ""
+					},
+					yAxis:{
+						categories: y_axis_categories,
+						min: 0,
+						max: y_axis_length
+					},
+					colorAxis: {
+						min: 0,
+						max: maxvalue
+					},
+					chart: {
+						height: chartheight,
+						width: chartwidth
+					},
+					series: [{
+						name: title,
+						borderWidth: 0,
+						data: [],
+						dataLabels: {
+							enabled: true,
+							color: '#000000'
+						}
+					}]
 				})
+				if(formdict["get_series"]) {
+					await plotDensPronoBySerie(chart, calibrados, status, formdict, url, maxvalue)
+					return
+				}
+				var heatmapdata = []				
+				var i = 0
+				for(const calibrado of calibrados) {
+					var cal_id = calibrado.id
+					var thisformdata = [...formdata]
+					thisformdata.push({name:"cal_id", value: cal_id})
+					thisformdata.push({name:"include_timestamps", value: true})
+					var querystring = thisformdata.map(x=>{
+						return x.name + "=" + x.value
+					}).join("&")
+					console.log(querystring)
+					try {
+						var data = await $.get(url + "?" + querystring)
+					} catch(e) {
+						alert("get densidad failed!");
+						// chart.hideLoading();
+						document.body.style.cursor = "default";
+						continue
+					}
+						// , (data,status) => {
+						//	if(status !== 'success') {
+								// chart.hideLoading();
+						//		alert("get densidad error! Status:" + status)
+						//		document.body.style.cursor = "default";
+						//		return
+						//	}
+					if(!data || !data.values || !Array.isArray(data.values)) {
+						// chart.hideLoading();
+						alert("get densidad error! Not found")
+						// document.body.style.cursor = "default";
+						continue
+					}
+					heatmapdata = heatmapdata.concat(data.values.map((it,j)=>{
+						if(it > maxvalue) {
+							maxvalue = it
+						}
+						return [j,i,it]
+					}))
+					if(i==0) {  
+						// chart.series[0].setData(heatmapdata, false)
+						chart.update({
+							xAxis: [{
+								categories: data.timestamps.map(ts=>new Date(ts).toISOString().substring(0,13))
+							},{
+								categories: data.timestamps.map(ts=>new Date(ts).toISOString().substring(0,13))
+							}]
+						})
+					}
+					i += 1
+				}
+				var chartwidth = $(window).width()
+				console.debug({heatmapdata:heatmapdata})
+				chart.series[0].setData(heatmapdata)					
+				chart.hideLoading();
+				$("div#container").css("overflow","scroll");
+				$("div#container").show();
+				document.body.style.cursor = "default";
+				console.log("chart updated");
 			}		
 			//  Start exec
 			//~ $(document).ready(function() {
@@ -1429,7 +1437,7 @@
 				}
 			}
 
-			function plotDensPronoBySerie(chart, calibrados, status, formdict, url, maxvalue) {
+			async function plotDensPronoBySerie(chart, calibrados, status, formdict, url, maxvalue) {
 				var heatmapdata = []
 				var i = 0
 				for(const calibrado of calibrados) {
@@ -1445,49 +1453,45 @@
 							`${key}=${thisformdict[key]}`
 						).join("&")
 						console.log(querystring)
-						$.get(url + "?" + querystring, (data,status) => {
-							if(status !== 'success') {
-								// chart.hideLoading();
-								alert("get densidad error! Status:" + status)
-								document.body.style.cursor = "default";
-								return
-							}
-							if(!data || !data.values || !Array.isArray(data.values)) {
-								// chart.hideLoading();
-								alert("get densidad error! Not found")
-								// document.body.style.cursor = "default";
-								return
-							}
-							heatmapdata = heatmapdata.concat(data.values.map((it,j)=>{
-								if(it > maxvalue) {
-									maxvalue = it
-								}
-								return [j,i,it]
-							}))
-							var chartwidth = $(window).width()
-							chart.series[0].setData(heatmapdata)
-							if(i==0) {  
-								chart.update({
-									xAxis: [{
-										categories: data.timestamps.map(ts=>new Date(ts).toISOString().substring(0,13))
-									},{
-										categories: data.timestamps.map(ts=>new Date(ts).toISOString().substring(0,13))
-									}]
-								})
-							}
-							i = i + 1
-							chart.hideLoading();
-							$("div#container").css("overflow","scroll");
-							$("div#container").show();
-							document.body.style.cursor = "default";
-							console.log("chart updated");
-						})
-						.fail( () => {
+						try {
+							var data = await $.get(url + "?" + querystring)
+						} catch(e) {
 							alert("get densidad failed!");
 							// chart.hideLoading();
 							document.body.style.cursor = "default";
-						})
+							continue
+						}
+						if(!data || !data.values || !Array.isArray(data.values)) {
+							// chart.hideLoading();
+							alert("get densidad error! Not found")
+							// document.body.style.cursor = "default";
+							continue
+						}
+						heatmapdata = heatmapdata.concat(data.values.map((it,j)=>{
+							if(it > maxvalue) {
+								maxvalue = it
+							}
+							return [j,i,it]
+						}))
+						var chartwidth = $(window).width()
+						if(i==0) {  
+							chart.series[0].setData(heatmapdata)
+							chart.update({
+								xAxis: [{
+									categories: data.timestamps.map(ts=>new Date(ts).toISOString().substring(0,13))
+								},{
+									categories: data.timestamps.map(ts=>new Date(ts).toISOString().substring(0,13))
+								}]
+							})
+						}
+						i = i + 1
 					}
+					chart.series[0].setData(heatmapdata)
+					chart.hideLoading();
+					$("div#container").css("overflow","scroll");
+					$("div#container").show();
+					document.body.style.cursor = "default";
+					console.log("chart updated");		
 				}
 			}			
 		</script>
