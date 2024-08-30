@@ -579,6 +579,7 @@
 			if($("form.getdensprono input[name=timeend]").val() == "") {
 				$("form.getdensprono input[name=timeend]").val(default_prono_timeend.toISOString().substring(0,10))
 			}
+			var y_axis_items = {}
 			//~ $("form#getheatmap").submit()
 			$("form.getheatmap").submit(getData)
 			function getData(e) {
@@ -858,7 +859,14 @@
 								enabled: true,
 								color: '#000000'
 							}
-						}]
+						}],
+						tooltip: {
+							formatter: function () {
+								const title = this.series.yAxis.categories[this.point.y]
+								return '<b>' + title + '</b> tiene <br><b>' +
+									this.point.value + '</b> registros en <br><b>' + this.series.xAxis.categories[this.point.x] + '</b>';
+							}
+						}
 					})
 					tablas.forEach((tabla,i)=>{
 						var tabla_id = tabla.tabla_id
@@ -969,7 +977,14 @@
 								enabled: true,
 								color: '#000000'
 							}
-						}]
+						}],
+						tooltip: {
+							formatter: function () {
+								const title = this.series.yAxis.categories[this.point.y]
+								return '<b>' + title + '</b> tiene <br><b>' +
+									this.point.value + '</b> registros en <br><b>' + this.series.xAxis.categories[this.point.x] + '</b>';
+							}
+						}
 					})
 					fuentes.forEach((fuente,i)=>{
 						var fuentes_id = fuente.id
@@ -1080,7 +1095,14 @@
 								enabled: true,
 								color: '#000000'
 							}
-						}]
+						}],
+						tooltip: {
+							formatter: function () {
+								const title = this.series.yAxis.categories[this.point.y]
+								return '<b>' + title + '</b> tiene <br><b>' +
+									this.point.value + '</b> registros en <br><b>' + this.series.xAxis.categories[this.point.x] + '</b>';
+							}
+						}
 					})
 					fuentes.forEach((fuente,i)=>{
 						var series_id = fuente.id
@@ -1141,7 +1163,7 @@
 				})
 			}
 			$("form.getdensprono").submit(getDensProno)
-			function getDensProno(e) {
+			async function getDensProno(e) {
 				e.preventDefault()
 				var formdata = $(e.target).serializeArray()
 				// var form_data = new FormData(e.target);
@@ -1159,134 +1181,164 @@
 							return x.name + "=" + x.value
 						}).join("&")
 				// const cal_query_string = (formdict.cal_grupo_id != undefined) ? `?calGrupoId=${formdict.cal_grupo_id}` : ""
-				$.get("cal?" + cal_query_string, (calibrados,status) => {
-					var y_axis_length = (formdict.get_series) ? calibrados.reduce((a, b)=> a + b.series.length, 0) - 1 : calibrados.length - 1
-					console.log({y_axis_length: y_axis_length})
-					var chartheight = (y_axis_length * 30 > 500) ?  y_axis_length * 30 : 500 
-					document.body.style.cursor = "default"
-					var maxvalue = 0
-					var y_axis_categories = (formdict.get_series) ? calibrados.map(cal=> cal.series.map(serie=> `${cal.id} - ${serie.series_id} - ${serie.cor_id}`)).flat() : calibrados.map(it=> `${it.id} - ${it.nombre}`)
-					chart.update({
-						title: {
-							text: title
-						},
-						subtitle: {
-							text: ""
-						},
-						yAxis:{
-							categories: y_axis_categories,
-							min: 0,
-							max: y_axis_length,
-							labels: {
-								formatter: (formdict.get_series) ? 
-									function() {
-										if(!this.value.split) {
-											return this.value
-										}
-										const ids = this.value.split(" - ")
-										return `<a class=prono_link href="https://alerta.ina.gob.ar/a6/sim/calibrados/${ids[0]}/corridas/${ids[2]}?series_id=${ids[1]}&includeProno=true&timestart=${formdict["timestart"]}&timeend=${formdict["timeend"]}" target=_blank>${this.value}</a>`
-									}
-									: (formdict.count == "corridas") ?
-										function() {
-										if(!this.value.split) {
-											return this.value
-										}
-										const ids = this.value.split(" - ")
-											return `<a class=prono_link href="https://alerta.ina.gob.ar/a6/sim/calibrados/${ids[0]}/corridas?includeProno=true&forecast_timestart=${formdict["timestart"]}&forecast_timeend=${formdict["timeend"]}" target=_blank>${this.value}</a>`
-										}
-									:
-										function() {
-										if(!this.value.split) {
-											return this.value
-										}
-										const ids = this.value.split(" - ")
-											return `<a class=prono_link href="https://alerta.ina.gob.ar/a6/sim/calibrados/${ids[0]}/corridas/last?includeProno=true&timestart=${formdict["timestart"]}&timeend=${formdict["timeend"]}" target=_blank>${this.value}</a>`
-										}
-							}
-						},
-						colorAxis: {
-							min: 0,
-							max: maxvalue
-						},
-						chart: {
-							height: chartheight,
-							width: chartwidth
-						},
-						series: [{
-							name: title,
-							borderWidth: 0,
-							data: [],
-							dataLabels: {
-								enabled: true,
-								color: '#000000'
-							}
-						}]
-					})
-					if(formdict["get_series"]) {
-						plotDensPronoBySerie(chart, calibrados, status, formdict, url, maxvalue)
-						return
-					}
-					var heatmapdata = []	
-					if(y_axis_length == -1) {
-						alert("No se encontraron calibrados")
-					}			
-					calibrados.forEach((calibrado,i)=>{
-						var cal_id = calibrado.id
-						var thisformdata = [...formdata]
-						thisformdata.push({name:"cal_id", value: cal_id})
-						thisformdata.push({name:"include_timestamps", value: true})
-						var querystring = thisformdata.map(x=>{
-							return x.name + "=" + x.value
-						}).join("&")
-						console.log(querystring)
-						$.get(url + "?" + querystring, (data,status) => {
-							if(status !== 'success') {
-								// chart.hideLoading();
-								alert("get densidad error! Status:" + status)
-								document.body.style.cursor = "default";
-								return
-							}
-							if(!data || !data.values || !Array.isArray(data.values)) {
-								// chart.hideLoading();
-								alert("get densidad error! Not found")
-								// document.body.style.cursor = "default";
-								return
-							}
-							heatmapdata = heatmapdata.concat(data.values.map((it,j)=>{
-								if(it > maxvalue) {
-									maxvalue = it
-								}
-								return [j,i,it]
-							}))
-							var chartwidth = $(window).width()
-							chart.series[0].setData(heatmapdata)
-							if(i==0) {  
-								chart.update({
-									xAxis: [{
-										categories: data.timestamps.map(ts=>new Date(ts).toISOString().substring(0,13))
-									},{
-										categories: data.timestamps.map(ts=>new Date(ts).toISOString().substring(0,13))
-									}]
-								})
-							}
-							chart.hideLoading();
-							$("div#container").css("overflow","scroll");
-							$("div#container").show();
-							document.body.style.cursor = "default";
-							console.log("chart updated");
-						})
-						.fail( () => {
-							alert("get densidad failed!");
-							// chart.hideLoading();
-							document.body.style.cursor = "default";
-						})
-					})
-				})
-				.fail( () => {
-					alert("get fuentes failed!");
+				try {
+					var calibrados = await $.get("cal?" + cal_query_string)
+				} catch(e) {
+					console.error(e)
+					alert("get calibrados failed!");
 					chart.hideLoading();
 					document.body.style.cursor = "default";
+					return
+				}		
+				var y_axis_length = (formdict.get_series) ? calibrados.reduce((a, b)=> a + b.series.length, 0) - 1 : calibrados.length - 1
+				console.log({y_axis_length: y_axis_length})
+				var chartheight = (y_axis_length * 30 > 500) ?  y_axis_length * 30 : 500 
+				document.body.style.cursor = "default"
+				var maxvalue = 0
+				y_axis_items = {}
+				var y_axis_categories = []
+				for(const cal of calibrados) {
+					if (formdict.get_series) {
+						 for(const serie of cal.series) {
+							const value = `${cal.id} - ${serie.series_id} - ${serie.cor_id}`
+							const item = {
+								id: cal.id,
+								nombre: cal.nombre,
+								serie: serie
+							}
+							y_axis_items[value] = item
+							y_axis_categories.push(value)
+						} 
+					} else {
+						const value = `${cal.id} - ${cal.nombre}`
+						y_axis_items[value] = cal
+						y_axis_categories.push(value)
+					}
+				}
+				y_axis_categories = y_axis_categories.flat()
+				chart.update({
+					title: {
+						text: title
+					},
+					subtitle: {
+						text: ""
+					},
+					yAxis:{
+						categories: y_axis_categories,
+						min: 0,
+						max: y_axis_length,
+						labels: {
+							formatter: (formdict.get_series) ? 
+								function() {
+									if(!this.value.split) {
+										return this.value
+									}
+									const ids = this.value.split(" - ")
+									const item = y_axis_items[this.value]
+									const title = `${item.nombre} (${item.estacion_id}) - ${item.var_var} [${item.unit_abrev}]`
+									return `<a class=prono_link href="https://alerta.ina.gob.ar/a6/sim/calibrados/${ids[0]}/corridas/${ids[2]}?series_id=${ids[1]}&includeProno=true&timestart=${formdict["timestart"]}&timeend=${formdict["timeend"]}" target=_blank title="${title}">${this.value}</a>`
+								}
+								: (formdict.count == "corridas") ?
+									function() {
+									if(!this.value.split) {
+										return this.value
+									}
+									const ids = this.value.split(" - ")
+										return `<a class=prono_link href="https://alerta.ina.gob.ar/a6/sim/calibrados/${ids[0]}/corridas?includeProno=true&forecast_timestart=${formdict["timestart"]}&forecast_timeend=${formdict["timeend"]}" target=_blank>${this.value}</a>`
+									}
+								:
+									function() {
+									if(!this.value.split) {
+										return this.value
+									}
+									const ids = this.value.split(" - ")
+										return `<a class=prono_link href="https://alerta.ina.gob.ar/a6/sim/calibrados/${ids[0]}/corridas/last?includeProno=true&timestart=${formdict["timestart"]}&timeend=${formdict["timeend"]}" target=_blank>${this.value}</a>`
+									}
+						}
+					},
+					colorAxis: {
+						min: 0,
+						max: maxvalue
+					},
+					chart: {
+						height: chartheight,
+						width: chartwidth
+					},
+					series: [{
+						name: title,
+						borderWidth: 0,
+						data: [],
+						dataLabels: {
+							enabled: true,
+							color: '#000000'
+						}
+					}],
+					tooltip: {
+						formatter: function () {
+							const title = this.series.yAxis.categories[this.point.y]
+							return '<b>' + title + '</b> tiene <br><b>' +
+								this.point.value + '</b> registros en <br><b>' + this.series.xAxis.categories[this.point.x] + '</b>';
+						}
+					}
 				})
+				if(formdict["get_series"]) {
+					await plotDensPronoBySerie(chart, calibrados, status, formdict, url, maxvalue)
+					return
+				}
+				var heatmapdata = []	
+				if(y_axis_length == -1) {
+					alert("No se encontraron calibrados")
+				}			
+				var i = 0
+				for(const calibrado of calibrados) {
+					var cal_id = calibrado.id
+					var thisformdata = [...formdata]
+					thisformdata.push({name:"cal_id", value: cal_id})
+					thisformdata.push({name:"include_timestamps", value: true})
+					var querystring = thisformdata.map(x=>{
+						return x.name + "=" + x.value
+					}).join("&")
+					console.log(querystring)
+					try {
+						var data = await $.get(url + "?" + querystring)
+					} catch(e) {
+						alert("get densidad failed!");
+						// chart.hideLoading();
+						document.body.style.cursor = "default";
+						continue
+					}
+					if(!data || !data.values || !Array.isArray(data.values)) {
+						// chart.hideLoading();
+						alert("get densidad error! Not found")
+						// document.body.style.cursor = "default";
+						continue
+					}
+					heatmapdata = heatmapdata.concat(data.values.map((it,j)=>{
+						if(it > maxvalue) {
+							maxvalue = it
+						}
+						return [j,i,it]
+					}))
+					if(i==0) {  
+						// chart.series[0].setData(heatmapdata, false)
+						chart.update({
+							xAxis: [{
+								categories: data.timestamps.map(ts=>new Date(ts).toISOString().substring(0,13))
+							},{
+								categories: data.timestamps.map(ts=>new Date(ts).toISOString().substring(0,13))
+							}]
+						})
+					}
+					i += 1
+				}
+				var chartwidth = $(window).width()
+				console.debug({heatmapdata:heatmapdata})
+				chart.series[0].setData(heatmapdata)					
+				chart.hideLoading();
+				$("div#container").css("overflow","scroll");
+				$("div#container").show();
+				document.body.style.cursor = "default";
+				console.log("chart updated");
 			}		
 			//  Start exec
 			//~ $(document).ready(function() {
@@ -1432,7 +1484,8 @@
 
 				tooltip: {
 					formatter: function () {
-						return '<b>' + this.series.yAxis.categories[this.point.y] + '</b> tiene <br><b>' +
+						const title = this.series.yAxis.categories[this.point.y]
+						return '<b>' + title + '</b> tiene <br><b>' +
 							this.point.value + '</b> registros en <br><b>' + this.series.xAxis.categories[this.point.x] + '</b>';
 					}
 				},
@@ -1458,10 +1511,19 @@
 				}
 			}
 
-			function plotDensPronoBySerie(chart, calibrados, status, formdict, url, maxvalue) {
+			async function plotDensPronoBySerie(chart, calibrados, status, formdict, url, maxvalue) {
 				chart.yAxis.formatter = {
 					
 				}
+				chart.update({
+					tooltip: {
+						formatter: function () {
+							const item = y_axis_items[this.series.yAxis.categories[this.point.y]]
+							return `<b>${item.id} - ${item.nombre} en ${item.serie.estacion_nombre} (${item.serie.estacion_id}) - ${item.serie.var_var} [${item.serie.unit_abrev}]</b> tiene <br><b>${this.point.value}</b> registros en <br><b>${this.series.xAxis.categories[this.point.x]}</b>`;
+						}
+					}
+				})
+
 				var heatmapdata = []
 				var i = 0
 				for(const calibrado of calibrados) {
@@ -1477,49 +1539,45 @@
 							`${key}=${thisformdict[key]}`
 						).join("&")
 						console.log(querystring)
-						$.get(url + "?" + querystring, (data,status) => {
-							if(status !== 'success') {
-								// chart.hideLoading();
-								alert("get densidad error! Status:" + status)
-								document.body.style.cursor = "default";
-								return
-							}
-							if(!data || !data.values || !Array.isArray(data.values)) {
-								// chart.hideLoading();
-								alert("get densidad error! Not found")
-								// document.body.style.cursor = "default";
-								return
-							}
-							heatmapdata = heatmapdata.concat(data.values.map((it,j)=>{
-								if(it > maxvalue) {
-									maxvalue = it
-								}
-								return [j,i,it]
-							}))
-							var chartwidth = $(window).width()
-							chart.series[0].setData(heatmapdata)
-							if(i==0) {  
-								chart.update({
-									xAxis: [{
-										categories: data.timestamps.map(ts=>new Date(ts).toISOString().substring(0,13))
-									},{
-										categories: data.timestamps.map(ts=>new Date(ts).toISOString().substring(0,13))
-									}]
-								})
-							}
-							i = i + 1
-							chart.hideLoading();
-							$("div#container").css("overflow","scroll");
-							$("div#container").show();
-							document.body.style.cursor = "default";
-							console.log("chart updated");
-						})
-						.fail( () => {
+						try {
+							var data = await $.get(url + "?" + querystring)
+						} catch(e) {
 							alert("get densidad failed!");
 							// chart.hideLoading();
 							document.body.style.cursor = "default";
-						})
+							continue
+						}
+						if(!data || !data.values || !Array.isArray(data.values)) {
+							// chart.hideLoading();
+							alert("get densidad error! Not found")
+							// document.body.style.cursor = "default";
+							continue
+						}
+						heatmapdata = heatmapdata.concat(data.values.map((it,j)=>{
+							if(it > maxvalue) {
+								maxvalue = it
+							}
+							return [j,i,it]
+						}))
+						var chartwidth = $(window).width()
+						if(i==0) {  
+							chart.series[0].setData(heatmapdata)
+							chart.update({
+								xAxis: [{
+									categories: data.timestamps.map(ts=>new Date(ts).toISOString().substring(0,13))
+								},{
+									categories: data.timestamps.map(ts=>new Date(ts).toISOString().substring(0,13))
+								}]
+							})
+						}
+						i = i + 1
 					}
+					chart.series[0].setData(heatmapdata)
+					chart.hideLoading();
+					$("div#container").css("overflow","scroll");
+					$("div#container").show();
+					document.body.style.cursor = "default";
+					console.log("chart updated");		
 				}
 			}			
 		</script>
