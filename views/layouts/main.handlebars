@@ -913,15 +913,15 @@
 							document.body.style.cursor = "default";
 							console.log("chart updated");
 						})
-						.fail( () => {
-							alert("get densidad failed!");
+						.fail( (jqXHR) => {
+							alert("get densidad failed!: " + jqXHR.responseText);
 							// chart.hideLoading();
 							document.body.style.cursor = "default";
 						})
 					})
 				})
-				.fail( () => {
-					alert("get tablas failed!");
+				.fail( (jqXHR) => {
+					alert("get tablas failed!: " + jqXHR.responseText);
 					chart.hideLoading();
 					document.body.style.cursor = "default";
 				})
@@ -1031,15 +1031,15 @@
 							document.body.style.cursor = "default";
 							console.log("chart updated");
 						})
-						.fail( () => {
-							alert("get densidad failed!");
+						.fail( (jqXHR) => {
+							alert("get densidad failed!:" + jqXHR.responseText);
 							// chart.hideLoading();
 							document.body.style.cursor = "default";
 						})
 					})
 				})
-				.fail( () => {
-					alert("get fuentes failed!");
+				.fail( (jqXHR) => {
+					alert("get fuentes failed!: " + jqXHR.responseText);
 					chart.hideLoading();
 					document.body.style.cursor = "default";
 				})
@@ -1149,15 +1149,15 @@
 							document.body.style.cursor = "default";
 							console.log("chart updated");
 						})
-						.fail( () => {
-							alert("get densidad failed!");
+						.fail( (jqXHR) => {
+							alert("get densidad failed!: " + jqXHR.responseText);
 							// chart.hideLoading();
 							document.body.style.cursor = "default";
 						})
 					})
 				})
-				.fail( () => {
-					alert("get fuentes failed!");
+				.fail( (jqXHR) => {
+					alert("get seriesrast failed!:" + jqXHR.responseText);
 					chart.hideLoading();
 					document.body.style.cursor = "default";
 				})
@@ -1350,8 +1350,8 @@
 			$("form.getdens input[name=timeend]").val(def_timeend.toISOString().substring(0,10))
 			var urlParams = new URLSearchParams(location.search);
 			gettablas()
-			.fail((e) => {
-				alert("Falla al intentar obtener listado de redes");
+			.fail((jqXHR) => {
+				alert("Falla al intentar obtener listado de redes: " + jqXHR.responseText);
 			})
 			.done(()=> {
 				console.log("Listado de tablas obtenido");
@@ -1361,8 +1361,8 @@
 				$("select.tabla").change();
 			})
 			getvar()
-			.fail((e) => {
-				alert("Falla al intentar obtener listado de variables")
+			.fail((jqXHR) => {
+				alert("Falla al intentar obtener listado de variables: " + jqXHR.responseText)
 			})
 			.done(()=> {
 				console.log("Listado de variables obtenido")
@@ -1375,8 +1375,8 @@
 				$("select.tabla").change();
 			})
 			getproc()
-			.fail((e) => {
-				alert("Falla al intentar obtener listado de procedimientos")
+			.fail((jqXHR) => {
+				alert("Falla al intentar obtener listado de procedimientos: " + jqXHR.responseText)
 			})
 			.done(()=> {
 				console.log("Listado de procedimientos obtenido")
@@ -1386,8 +1386,8 @@
 				// $("select.tabla").change();
 			})
 			getunit()
-			.fail((e) => {
-				alert("Falla al intentar obtener listado de unidades")
+			.fail((jqXHR) => {
+				alert("Falla al intentar obtener listado de unidades: " + jqXHR.responseText)
 			})
 			.done(()=> {
 				console.log("Listado de unidades obtenido")
@@ -1397,8 +1397,8 @@
 				// $("select.tabla").change();
 			})
 			getCalGrupoId()
-			.fail((e) => {
-				alert("Falla al intentar obtener listado de grupos de calibrados")
+			.fail((jqXHR) => {
+				alert("Falla al intentar obtener listado de grupos de calibrados: " + jqXHR.responseText)
 			})
 			.done(()=> {
 				console.log("Listado de grupos de calibrados obtenido")
@@ -1542,7 +1542,7 @@
 						try {
 							var data = await $.get(url + "?" + querystring)
 						} catch(e) {
-							alert("get densidad failed!");
+							alert("get densidad failed!: " + e.toString());
 							// chart.hideLoading();
 							document.body.style.cursor = "default";
 							continue
