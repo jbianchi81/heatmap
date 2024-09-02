@@ -680,8 +680,8 @@
 					document.body.style.cursor = "default";
 					console.log("chart updated");
 				})
-				.fail( () => {
-					alert("get heatmap failed!");
+				.fail( (jqXHR) => {
+					alert("get heatmap failed!: " + jqXHR.responseText);
 					chart.hideLoading();
 					document.body.style.cursor = "default";
 				})
